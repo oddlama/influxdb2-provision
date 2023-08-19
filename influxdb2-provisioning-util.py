@@ -26,6 +26,9 @@ def main():
     url = sys.argv[2]
     token = sys.argv[3]
 
+    # Track changes to print a machine readable summary at the end
+    changes = dict(users=[], orgs=[], buckets=[], auths=[])
+
     with InfluxDBClient(url=url, token=token) as client:
         # Initialize APIs
         buckets_api = client.buckets_api()
@@ -59,7 +62,8 @@ def main():
                 if (org := find_org(org_name)) is not None:
                     orgs_api.delete_organization(org_id=org.id)
                     del known_orgs[org_name]
-                    print(f"Deleted organization: {org_name}")
+                    changes["orgs"].append(dict(action="deleted", name=org_name))
+                    print(f"Deleted organization: {org_name}", file=sys.stderr)
 
         def create_or_update_org(org_name, org_data):
             def _update(org, org_data):
@@ -75,7 +79,8 @@ def main():
                     org = _update(Organization(name=org_name), org_data)
                     org = orgs_api.create_organization(organization=org)
                     known_orgs[org_name] = org
-                    print(f"Created organization: {org_name}")
+                    changes["orgs"].append(dict(action="created", name=org_name))
+                    print(f"Created organization: {org_name}", file=sys.stderr)
 
         ######## Buckets
 
@@ -94,7 +99,8 @@ def main():
             if not bucket_data["present"]:
                 if (bucket := find_bucket(org_name, bucket_name)) is not None:
                     buckets_api.delete_bucket(bucket)
-                    print(f"Deleted bucket: {org_name}.{bucket_name}")
+                    changes["buckets"].append(dict(action="deleted", org=org_name, name=bucket_name))
+                    print(f"Deleted bucket: {org_name}.{bucket_name}", file=sys.stderr)
 
         def create_or_update_bucket(org_name, bucket_name, bucket_data):
             def _update(bucket, bucket_data):
@@ -110,7 +116,8 @@ def main():
                 else:
                     bucket = _update(Bucket(name=bucket_name, retention_rules=[BucketRetentionRules()]), bucket_data)
                     bucket = buckets_api.create_bucket(org=org_name, bucket_name=bucket.name, description=bucket.description, retention_rules=bucket.retention_rules)
-                    print(f"Created bucket: {org_name}.{bucket_name}")
+                    changes["buckets"].append(dict(action="created", org=org_name, name=bucket_name))
+                    print(f"Created bucket: {org_name}.{bucket_name}", file=sys.stderr)
 
         ######## Auths
 
@@ -120,11 +127,12 @@ def main():
                     return auth
             return None
 
-        def delete_auth(auth_data):
+        def delete_auth(org_name, auth_data):
             if not auth_data["present"]:
                 if (auth := find_auth(auth_data["id"])) is not None:
                     auths_api.delete_authorization(auth)
-                    print(f"Deleted auth: {auth.description}")
+                    changes["auths"].append(dict(action="deleted", org=org_name, id=auth_data["id"]))
+                    print(f"Deleted auth: {auth.description}", file=sys.stderr)
 
         def create_or_update_auth(org_name, auth_name, auth_data):
             def _update(auth, auth_data):
@@ -171,9 +179,9 @@ def main():
                     org = find_org(org_name)
                     assert org is not None
                     auth = _update(Authorization(org_id=org.id), auth_data)
-                    print(f"{auth}")
                     auth = auths_api.create_authorization(authorization=auth)
-                    print(f"Created auth: {auth.description}")
+                    changes["auths"].append(dict(action="created", org=org_name, id=auth_data["id"]))
+                    print(f"Created auth: {auth.description}", file=sys.stderr)
 
         ######## Users
 
@@ -192,7 +200,8 @@ def main():
             if not user_data["present"]:
                 if (user := find_user(user_name)) is not None:
                     users_api.delete_user(user)
-                    print(f"Deleted user: {user_name}")
+                    changes["users"].append(dict(action="deleted", name=user_name))
+                    print(f"Deleted user: {user_name}", file=sys.stderr)
 
         def create_or_update_user(user_name, user_data):
             if user_data["present"]:
@@ -200,7 +209,8 @@ def main():
                     pass # No updateable attributes
                 else:
                     user = users_api.create_user(name=user_name)
-                    print(f"Created user: {user_name}")
+                    changes["users"].append(dict(action="created", name=user_name))
+                    print(f"Created user: {user_name}", file=sys.stderr)
                 users_api.update_password(user, load_secret(user_data["passwordFile"]))
 
         ######## Provisioning
@@ -216,7 +226,7 @@ def main():
             # XXX: remotes
             # XXX:   replications
             for _, auth_data in org_data["auths"].items():
-                delete_auth(auth_data)
+                delete_auth(org_name, auth_data)
             delete_org(org_name, org_data)
 
         # Create organizations
@@ -233,6 +243,8 @@ def main():
         # Create users
         for user_name, user_data in state["users"].items():
             create_or_update_user(user_name, user_data)
+
+        print(json.dumps(changes))
 
 if __name__ == "__main__":
     main()
