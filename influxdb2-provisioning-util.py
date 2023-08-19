@@ -18,6 +18,7 @@ def load_secret(filename):
 def main():
     if len(sys.argv) != 4:
         print("usage: python3 influxdb2-provisioning-util.py <state.json> <URL> <ADMIN_TOKEN>")
+        sys.exit(1)
 
     with open(sys.argv[1], "r") as state_file:
         state = json.load(state_file)
