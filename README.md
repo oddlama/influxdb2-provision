@@ -1,6 +1,6 @@
-[About](#influxdb2-provisioning-util) \| [Usage](#usage)
+[About](#influxdb2-provision) \| [Usage](#usage)
 
-## Influxdb2 Provisioning Util
+## Influxdb2 Provision
 
 This is a tiny helper utility that uses influxdb2's python client api to realize
 a desired state of organizations, buckets, authentications and users.
@@ -15,7 +15,7 @@ at any point in time to accomodate this primary goal.
 Make sure the influxdb-client python library is installed and run the utility by using
 
 ```bash
-$ python3 ./influxdb2-provisioning-util.py state.json "<URL>" "<ADMIN_TOKEN>"
+$ python3 ./influxdb2-provision.py state.json "<URL>" "<ADMIN_TOKEN>"
 ```
 
 Refer to the influxdb2 nixos module to see what should be contained in `state.json`.
